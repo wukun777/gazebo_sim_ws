@@ -1,0 +1,29 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/px4/src/mavros_ws/install/mavros_extras/include/**",
+        "/home/px4/src/mavros_ws/install/mavros/include/**",
+        "/home/px4/src/mavros_ws/install/mavros_msgs/include/**",
+        "/home/px4/src/mavros_ws/install/libmavconn/include/**",
+        "/home/px4/src/install/interface/include/**",
+        "/home/px4/install/livox_interfaces/include/**",
+        "/home/px4/install/interface/include/**",
+        "/opt/ros/humble/include/**",
+        "/home/px4/gazebo_sim_ws/src/aerial_manipulator_description/include/**",
+        "/home/px4/gazebo_sim_ws/src/gazebo_worlds/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}

@@ -1,0 +1,5 @@
+# This directory is a Syncthing folder marker.
+# Do not delete.
+
+folderID: 仿真工作空间同步
+created: 2026-07-26T22:00:35+08:00

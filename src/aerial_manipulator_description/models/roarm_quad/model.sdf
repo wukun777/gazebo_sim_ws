@@ -1,0 +1,474 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+  <model name="roarm_quad">
+  <static>false</static>
+    <!-- 关闭同一模型内部 link 之间的自碰撞；起落架仍与地面碰撞。 -->
+    <self_collide>false</self_collide>
+    <!-- ========================================== -->
+    <!--          1. 无人机主体 (Drone Body)         -->
+    <!-- ========================================== -->
+    <link name="base_link">
+      <pose>0 0 0.3 0 0 0</pose> <!-- 整体模型的初始起飞高度 -->
+      <inertial>
+        <!-- 💡 1. 无人机物理质心位置参数：修改前三项 [x y z] 调整质心物理偏置 (当前设为中心 0 0 0) -->
+        <pose>-0.053 0.036 0 0 0 0</pose>
+        <mass>3.6</mass> <!-- 无人机机身 3.6kg -->
+        <inertia>
+          <!-- 550轴距/3.6kg 估算的转动惯量 -->
+          <ixx>0.045</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>0.045</iyy>
+          <iyz>0</iyz>
+          <izz>0.071</izz>
+        </inertia>
+      </inertial>
+      
+ <!-- 💡 4.1 右前起落架脚垫 (FR Foot) -->
+      <collision name="landing_gear_fr">
+        <pose>0.152 -0.124 -0.19 0 0 0</pose> <!-- z坐标-0.22为起落架高度，可根据高度微调 -->
+        <geometry>
+          <sphere><radius>0.03</radius></sphere> <!-- 直径 4cm 的完美物理承重球 -->
+        </geometry>
+        <surface><contact><collide_bitmask>0x01</collide_bitmask></contact></surface>
+      </collision>
+
+      <!-- 💡 4.2 左后起落架脚垫 (BL Foot) -->
+      <collision name="landing_gear_bl">
+        <pose>-0.175 0.202 -0.19 0 0 0</pose>
+        <geometry>
+          <sphere><radius>0.03</radius></sphere>
+        </geometry>
+        <surface><contact><collide_bitmask>0x01</collide_bitmask></contact></surface>
+      </collision>
+
+      <!-- 💡 4.3 左前起落架脚垫 (FL Foot) -->
+      <collision name="landing_gear_fl">
+        <pose>0.152 0.202 -0.19 0 0 0</pose>
+        <geometry>
+          <sphere><radius>0.03</radius></sphere>
+        </geometry>
+        <surface><contact><collide_bitmask>0x01</collide_bitmask></contact></surface>
+      </collision>
+
+      <!-- 💡 4.4 右后起落架脚垫 (BR Foot) -->
+      <collision name="landing_gear_br">
+        <pose>-0.175 -0.124 -0.19 0 0 0</pose>
+        <geometry>
+          <sphere><radius>0.03</radius></sphere>
+        </geometry>
+        <surface><contact><collide_bitmask>0x01</collide_bitmask></contact></surface>
+      </collision>
+      
+      <visual name="base_link_visual">
+        <!-- 💡 2. 无人机 3D 机身网格微调参数：
+             - 前三项 [x y z]：微调 3D 视觉模型与物理中心的坐标偏差。
+             - 后三项 [r p y]：当前设为 [3.14159265 0 0] 使机身保持正向朝上。 -->
+        <pose>0 0 0 3.14159265 0 0</pose> 
+        <geometry>
+          <mesh>
+            <scale>0.001 0.001 0.001</scale> <!-- 毫米STL在此等比缩小为米 -->
+            <uri>model://roarm_quad/meshes/uav/drone_body.STL</uri>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+
+    <!-- ========================================== -->
+    <!--         2. 机械臂级联导入 (RoArm Arm)        -->
+    <!-- ========================================== -->
+    <!-- 💡 机械臂总质量已完美等比放大至 0.85kg 目标重量 -->
+    <link name="arm_base_link">
+      <!-- 💡 3. 机械臂安装与旋转参数：
+           - 前三项 [x y z]：修改 z (当前-0.06) 可以调整机械臂在无人机下方挂载的高度（贴合电池仓底面），正面看，向前，向右，向上。
+           - 后三项 [r p y]：第一项 Roll 设为 3.14159265，已实现机械臂整体一键翻转朝下挂载。 -->
+      <pose relative_to="base_link">0.006 0.037 0.07 3.14159265 0 0</pose> 
+      <inertial>
+        <pose>0.00373847392098165 -1.52445893424664E-10 0.0264265327292804 0 0 0</pose>
+        <mass>0.436540</mass> <!-- 官方原始: 0.326393kg -> 1.337倍放大 -->
+        <inertia>
+          <ixx>0.000299864</ixx>
+          <ixy>-2.63178E-13</ixy>
+          <ixz>-4.00204E-05</ixz>
+          <iyy>0.000383341</iyy>
+          <iyz>-4.15904E-13</iyz>
+          <izz>0.000468057</izz>
+        </inertia>
+      </inertial>
+      <visual name="arm_base_link_visual">
+        <geometry>
+          <mesh>
+            <uri>model://roarm_quad/meshes/arm/base_link.STL</uri>
+          </mesh>
+        </geometry>
+      </visual>
+      <!-- 机械臂碰撞暂时关闭以提高仿真速度；以后需要时删除本注释外壳。
+      <collision name="arm_base_link_collision">
+        <geometry>
+          <mesh>
+            <uri>model://roarm_quad/meshes/arm/base_link.STL</uri>
+          </mesh>
+        </geometry>
+         <surface>
+          <contact>
+            <collide_bitmask>0x02</collide_bitmask>
+          </contact>
+        </surface>
+      </collision>
+      -->
+    </link>
+
+    <!-- 刚性连接无人机 base_link 和 机械臂 arm_base_link -->
+    <joint name="drone_to_arm_joint" type="fixed">
+      <parent>base_link</parent>
+      <child>arm_base_link</child>
+    </joint>
+
+    <!-- 关节 1 -->
+    <link name="link1">
+      <pose relative_to="arm_base_link">0.01 0 0.123059 0 0 0</pose>
+      <inertial>
+        <pose>-3.11559626639357E-12 9.70240468164796E-06 -0.0146667419724465 0 0 0</pose>
+        <mass>0.124236</mass> <!-- 官方原始: 0.092889kg -> 1.337倍放大 -->
+        <inertia>
+          <ixx>8.14800E-05</ixx>
+          <ixy>-3.73431E-18</ixy>
+          <ixz>5.68212E-15</ixz>
+          <iyy>3.39040E-05</iyy>
+          <iyz>2.89485E-08</iyz>
+          <izz>6.52752E-05</izz>
+        </inertia>
+      </inertial>
+      <visual name="link1_visual"><geometry><mesh><uri>model://roarm_quad/meshes/arm/link1.STL</uri></mesh></geometry></visual>
+      <!-- 机械臂碰撞暂时关闭
+      <collision name="link1_collision"><geometry><mesh><uri>model://roarm_quad/meshes/arm/link1.STL</uri></mesh></geometry>
+      
+         <surface>
+          <contact>
+            <collide_bitmask>0x02</collide_bitmask>
+          </contact>
+        </surface>
+      </collision>
+      -->
+    </link>
+    <joint name="base_link_to_link1" type="revolute">
+      <parent>arm_base_link</parent>
+      <child>link1</child>
+      <axis>
+        <xyz>0 0 -1</xyz>
+        <limit><lower>-3.1416</lower><upper>3.1416</upper><effort>10</effort><velocity>5</velocity></limit>
+        <!-- 💡 增加关节阻尼与摩擦，模拟真实减速电机的物理阻力，阻碍自由晃动 -->
+        <dynamics>
+          <damping>2</damping>
+          <friction>10</friction>
+        </dynamics>
+      </axis>
+      <!-- 💡 开启隐式弹簧阻尼器，彻底防止限位撞击时的数值发散爆炸 -->
+      <physics>
+        <ode>
+          <implicit_spring_damper>true</implicit_spring_damper>
+        </ode>
+      </physics>
+    </joint>
+
+    <!-- 关节 2 -->
+    <link name="link2">
+      <pose relative_to="link1">0 0 0 -1.57079632679 -3.1415926535 0</pose>
+      <inertial>
+        <pose>0.122021157535333 6.61338425981053E-05 -9.50311342843365E-05 0 0 0</pose>
+        <mass>0.119813</mass> <!-- 官方原始: 0.089582kg -> 1.337倍放大 -->
+        <inertia>
+          <ixx>3.51344E-05</ixx>
+          <ixy>-3.41515E-06</ixy>
+          <ixz>-5.21931E-09</ixz>
+          <iyy>0.000468608</iyy>
+          <iyz>-9.12681E-09</iyz>
+          <izz>0.000445453</izz>
+        </inertia>
+      </inertial>
+      <visual name="link2_visual"><geometry><mesh><uri>model://roarm_quad/meshes/arm/link2.STL</uri></mesh></geometry></visual>
+      <!-- 机械臂碰撞暂时关闭
+      <collision name="link2_collision"><geometry><mesh><uri>model://roarm_quad/meshes/arm/link2.STL</uri></mesh></geometry>
+         <surface>
+          <contact>
+            <collide_bitmask>0x02</collide_bitmask>
+          </contact>
+        </surface>
+      
+      </collision>
+      -->
+    </link>
+    <joint name="link1_to_link2" type="revolute">
+      <parent>link1</parent>
+      <child>link2</child>
+      <axis>
+        <xyz>0 0 -1</xyz>
+        <limit><lower>-1.5708</lower><upper>1.5708</upper><effort>10</effort><velocity>5</velocity></limit>
+        <!-- 💡 增加关节阻尼与摩擦 -->
+        <dynamics>
+          <damping>4</damping>
+          <friction>20</friction>
+        </dynamics>
+      </axis>
+      <!-- 💡 开启隐式弹簧阻尼器 -->
+      <physics>
+        <ode>
+          <implicit_spring_damper>true</implicit_spring_damper>
+        </ode>
+      </physics>
+    </joint>
+
+    <!-- 关节 3 -->
+    <link name="link3">
+      <pose relative_to="link2">0.236815 0.030002 0 0 -1.57079632679 -1.57079632679</pose>
+      <inertial>
+        <pose>-0.00076280945740961 -0.114419656440929 -0.000177274968057332 0 0 0</pose>
+        <mass>0.164521</mass> <!-- 官方原始: 0.123009kg -> 1.337倍放大 -->
+        <inertia>
+          <ixx>0.000139246</ixx>
+          <ixy>1.42365E-07</ixy>
+          <ixz>2.07208E-07</ixz>
+          <iyy>1.95748E-05</iyy>
+          <iyz>-2.19819E-07</iyz>
+          <izz>0.000139109</izz>
+        </inertia>
+      </inertial>
+      <visual name="link3_visual"><geometry><mesh><uri>model://roarm_quad/meshes/arm/link3.STL</uri></mesh></geometry></visual>
+      <!-- 机械臂碰撞暂时关闭
+      <collision name="link3_collision"><geometry><mesh><uri>model://roarm_quad/meshes/arm/link3.STL</uri></mesh></geometry></collision>
+         <surface>
+          <contact>
+            <collide_bitmask>0x02</collide_bitmask>
+          </contact>
+        </surface>
+      
+      </collision>
+      -->
+    </link>
+    <joint name="link2_to_link3" type="revolute">
+      <parent>link2</parent>
+      <child>link3</child>
+      <axis>
+        <!-- 💡 修复：由于 link3 的 pose 相对 link2 进行了大角度旋转，其 local Z轴 已完全偏转。 -->
+        <!-- 经旋转矩阵推算，平行于大臂的俯仰轴现在对应 link3 局部坐标系的 X 轴，因此必须修改为 [1 0 0]！ -->
+        <xyz>1 0 0</xyz>
+        <limit><lower>-1</lower><upper>3.1416</upper><effort>10</effort><velocity>5</velocity></limit>
+        <!-- 💡 增加关节阻尼与摩擦 -->
+        <dynamics>
+          <damping>2</damping>
+          <friction>10</friction>
+        </dynamics>
+      </axis>
+      <!-- 💡 开启隐式弹簧阻尼器 -->
+      <physics>
+        <ode>
+          <implicit_spring_damper>true</implicit_spring_damper>
+        </ode>
+      </physics>
+    </joint>
+
+    <!-- 夹爪 -->
+    <link name="gripper_link">
+      <pose relative_to="link3">0.002906 -0.21599 -0.000667 -1.5708 0 -1.5708</pose>
+      <inertial>
+        <pose>0.0288857415118809 -0.000776842039187049 -0.000779764534254559 0 0 0</pose>
+        <mass>0.004891</mass> <!-- 官方原始: 0.003657kg -> 1.337倍放大 -->
+        <inertia>
+          <ixx>1.54000E-06</ixx>
+          <ixy>1.75543E-07</ixy>
+          <ixz>-3.23607E-13</ixz>
+          <iyy>3.11670E-06</iyy>
+          <iyz>5.53608E-13</iyz>
+          <izz>1.96850E-06</izz>
+        </inertia>
+      </inertial>
+      <visual name="gripper_link_visual"><geometry><mesh><uri>model://roarm_quad/meshes/arm/gripper_link.STL</uri></mesh></geometry></visual>
+      <!-- 机械臂碰撞暂时关闭
+      <collision name="gripper_link_collision"><geometry><mesh><uri>model://roarm_quad/meshes/arm/gripper_link.STL</uri></mesh></geometry></collision>
+      -->
+    </link>
+    <joint name="link3_to_gripper_link" type="revolute">
+      <parent>link3</parent>
+      <child>gripper_link</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit><lower>0</lower><upper>1.5</upper><effort>5</effort><velocity>5</velocity></limit>
+        <!-- 💡 增加关节阻尼与摩擦 -->
+        <dynamics>
+          <damping>2</damping>
+          <friction>10</friction>
+        </dynamics>
+      </axis>
+      <!-- 💡 开启隐式弹簧阻尼器 -->
+      <physics>
+        <ode>
+          <implicit_spring_damper>true</implicit_spring_damper>
+        </ode>
+      </physics>
+    </joint>
+
+
+
+    <!-- ========================================== -->
+    <!--          3. 四个旋翼 (4 Rotors)             -->
+    <!-- ========================================== -->
+    <!-- 💡 螺旋桨高低参数调校：微调下面 4 个 link 里的第 3 项 z（当前 0.08m），即可将螺旋桨移动到电机轴头上 -->
+
+    <!-- Rotor 0 (右前 FR, CCW) -->
+    <link name="rotor_0">
+      <!-- 💡 4. 螺旋桨 0 安装与高低参数 -->
+      <pose relative_to="base_link">0.182 -0.15 0.1125 0 0 0</pose>
+      <inertial><pose>0 0 0 0 0 0</pose><mass>0.005</mass><inertia><ixx>9.75e-07</ixx><ixy>0</ixy><ixz>0</ixz><iyy>0.000273</iyy><iyz>0</iyz><izz>0.000274</izz></inertia></inertial>
+      <visual name="rotor_0_visual"><geometry><mesh><scale>1 1 1</scale><uri>model://roarm_quad/meshes/rotors/iris_prop_ccw.dae</uri></mesh></geometry></visual>
+    </link>
+    <joint name="rotor_0_joint" type="revolute">
+      <parent>base_link</parent><child>rotor_0</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit><lower>-1e+16</lower><upper>1e+16</upper><effort>0.02</effort><velocity>220</velocity></limit>
+        <!-- 💡 增加微量阻尼保持电机旋转轴物理计算稳定，切勿设得过大（如超过0.01），否则会因阻力消耗电机输出拉力 -->
+        <dynamics>
+          <damping>0.001</damping>
+        </dynamics>
+      </axis>
+    </joint>
+
+    <!-- Rotor 1 (左后 BL, CCW) -->
+    <link name="rotor_1">
+      <!-- 💡 4. 螺旋桨 1 安装与高低参数 -->
+      <pose relative_to="base_link">-0.197 0.228 0.1125 0 0 0</pose>
+      <inertial><pose>0 0 0 0 0 0</pose><mass>0.005</mass><inertia><ixx>9.75e-07</ixx><ixy>0</ixy><ixz>0</ixz><iyy>0.000273</iyy><iyz>0</iyz><izz>0.000274</izz></inertia></inertial>
+      <visual name="rotor_1_visual"><geometry><mesh><scale>1 1 1</scale><uri>model://roarm_quad/meshes/rotors/iris_prop_ccw.dae</uri></mesh></geometry></visual>
+    </link>
+    <joint name="rotor_1_joint" type="revolute">
+      <parent>base_link</parent><child>rotor_1</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit><lower>-1e+16</lower><upper>1e+16</upper><effort>0.02</effort><velocity>220</velocity></limit>
+        <!-- 💡 增加微量阻尼 -->
+        <dynamics>
+          <damping>0.001</damping>
+        </dynamics>
+      </axis>
+    </joint>
+
+    <!-- Rotor 2 (左前 FL, CW) -->
+    <link name="rotor_2">
+      <!-- 💡 4. 螺旋桨 2 安装与高低参数 -->
+      <pose relative_to="base_link">0.181 0.229 0.1125 0 0 0</pose>
+      <inertial><pose>0 0 0 0 0 0</pose><mass>0.005</mass><inertia><ixx>9.75e-07</ixx><ixy>0</ixy><ixz>0</ixz><iyy>0.000273</iyy><iyz>0</iyz><izz>0.000274</izz></inertia></inertial>
+      <visual name="rotor_2_visual"><geometry><mesh><scale>1 1 1</scale><uri>model://roarm_quad/meshes/rotors/iris_prop_cw.dae</uri></mesh></geometry></visual>
+    </link>
+    <joint name="rotor_2_joint" type="revolute">
+      <parent>base_link</parent><child>rotor_2</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit><lower>-1e+16</lower><upper>1e+16</upper><effort>0.02</effort><velocity>220</velocity></limit>
+        <!-- 💡 增加微量阻尼 -->
+        <dynamics>
+          <damping>0.001</damping>
+        </dynamics>
+      </axis>
+    </joint>
+
+    <!-- Rotor 3 (右后 BR, CW) -->
+    <link name="rotor_3">
+      <!-- 💡 4. 螺旋桨 3 安装与高低参数 -->
+      <pose relative_to="base_link">-0.2 -0.1515 0.1125 0 0 0</pose>
+      <inertial><pose>0 0 0 0 0 0</pose><mass>0.005</mass><inertia><ixx>9.75e-07</ixx><ixy>0</ixy><ixz>0</ixz><iyy>0.000273</iyy><iyz>0</iyz><izz>0.000274</izz></inertia></inertial>
+      <visual name="rotor_3_visual"><geometry><mesh><scale>1 1 1</scale><uri>model://roarm_quad/meshes/rotors/iris_prop_cw.dae</uri></mesh></geometry></visual>
+    </link>
+    <joint name="rotor_3_joint" type="revolute">
+      <parent>base_link</parent><child>rotor_3</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit><lower>-1e+16</lower><upper>1e+16</upper><effort>0.02</effort><velocity>220</velocity></limit>
+        <!-- 💡 增加微量阻尼 -->
+        <dynamics>
+          <damping>0.001</damping>
+        </dynamics>
+      </axis>
+    </joint>
+
+
+    <!-- ========================================== -->
+    <!--       4. ROS 2 direct rotor force interface         -->
+    <!-- ========================================== -->
+    <!--
+      控制节点向四个 cmd_force 话题发布 geometry_msgs/msg/Wrench。
+      force.z 为旋翼升力，torque.z 为旋翼反扭矩。
+    -->
+    <plugin name="gazebo_ros_force_rotor_0" filename="libgazebo_ros_force.so">
+      <ros>
+        <namespace>/roarm_quad/rotor_0</namespace>
+        <remapping>gazebo_ros_force:=cmd_force</remapping>
+      </ros>
+      <link_name>rotor_0</link_name>
+      <force_frame>link</force_frame>
+    </plugin>
+
+    <plugin name="gazebo_ros_force_rotor_1" filename="libgazebo_ros_force.so">
+      <ros>
+        <namespace>/roarm_quad/rotor_1</namespace>
+        <remapping>gazebo_ros_force:=cmd_force</remapping>
+      </ros>
+      <link_name>rotor_1</link_name>
+      <force_frame>link</force_frame>
+    </plugin>
+
+    <plugin name="gazebo_ros_force_rotor_2" filename="libgazebo_ros_force.so">
+      <ros>
+        <namespace>/roarm_quad/rotor_2</namespace>
+        <remapping>gazebo_ros_force:=cmd_force</remapping>
+      </ros>
+      <link_name>rotor_2</link_name>
+      <force_frame>link</force_frame>
+    </plugin>
+
+    <plugin name="gazebo_ros_force_rotor_3" filename="libgazebo_ros_force.so">
+      <ros>
+        <namespace>/roarm_quad/rotor_3</namespace>
+        <remapping>gazebo_ros_force:=cmd_force</remapping>
+      </ros>
+      <link_name>rotor_3</link_name>
+      <force_frame>link</force_frame>
+    </plugin>
+
+    <!-- ========================================== -->
+    <!--          5. ROS 2 原生 IMU                  -->
+    <!-- ========================================== -->
+    <link name="imu_link">
+      <pose relative_to="base_link">0 0 0 0 0 0</pose>
+      <inertial>
+        <pose>0 0 0 0 0 0</pose>
+        <mass>0.015</mass>
+        <inertia>
+          <ixx>1e-05</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>1e-05</iyy>
+          <iyz>0</iyz>
+          <izz>1e-05</izz>
+        </inertia>
+      </inertial>
+      <sensor name="imu_sensor" type="imu">
+        <always_on>true</always_on>
+        <update_rate>200.0</update_rate>
+        <visualize>false</visualize>
+        <topic>/imu/data</topic>
+        <plugin name="gazebo_ros_imu_sensor" filename="libgazebo_ros_imu_sensor.so">
+          <ros>
+            <namespace>/</namespace>
+            <remapping>~/out:=/imu/data</remapping>
+          </ros>
+          <frame_name>imu_link</frame_name>
+          <initial_orientation_as_reference>false</initial_orientation_as_reference>
+        </plugin>
+      </sensor>
+    </link>
+    <joint name="imu_joint" type="fixed">
+      <parent>base_link</parent>
+      <child>imu_link</child>
+    </joint>
+  </model>
+</sdf>

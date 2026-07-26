@@ -1,0 +1,26 @@
+{
+    "python.autoComplete.extraPaths": [
+        "/home/px4/gazebo_sim_ws/build/hover_control",
+        "/home/px4/gazebo_sim_ws/install/hover_control/lib/python3.10/site-packages",
+        "/home/px4/src/mavros_ws/install/px4_demo/lib/python3.10/site-packages",
+        "/home/px4/src/mavros_ws/install/mavros/local/lib/python3.10/dist-packages",
+        "/home/px4/src/mavros_ws/install/mavros_msgs/local/lib/python3.10/dist-packages",
+        "/home/px4/src/install/interface/local/lib/python3.10/dist-packages",
+        "/home/px4/install/livox_interfaces/local/lib/python3.10/dist-packages",
+        "/home/px4/install/interface/local/lib/python3.10/dist-packages",
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+    ],
+    "python.analysis.extraPaths": [
+        "/home/px4/gazebo_sim_ws/build/hover_control",
+        "/home/px4/gazebo_sim_ws/install/hover_control/lib/python3.10/site-packages",
+        "/home/px4/src/mavros_ws/install/px4_demo/lib/python3.10/site-packages",
+        "/home/px4/src/mavros_ws/install/mavros/local/lib/python3.10/dist-packages",
+        "/home/px4/src/mavros_ws/install/mavros_msgs/local/lib/python3.10/dist-packages",
+        "/home/px4/src/install/interface/local/lib/python3.10/dist-packages",
+        "/home/px4/install/livox_interfaces/local/lib/python3.10/dist-packages",
+        "/home/px4/install/interface/local/lib/python3.10/dist-packages",
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+    ]
+}
