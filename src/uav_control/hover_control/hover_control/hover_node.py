@@ -1,541 +1,486 @@
 #!/usr/bin/env python3
-"""ROS 2 + Gazebo Classic quadrotor takeoff and hover controller.
+"""向ROS 2电机—旋翼动力学插件发送四路目标角速度。
 
-This node reads the simulated base_link state from gazebo_msgs/LinkStates and
-publishes geometry_msgs/Wrench commands to the four force plugins declared in
-the roarm_quad model.sdf.
+修改说明：
+1. 删除gz topic子进程调用。
+2. 删除PX4的mav_msgs、libmav_msgs.so和Gazebo Transport接口。
+3. 改为发布std_msgs/msg/Float64MultiArray。
+4. 一条ROS 2消息同时包含四个旋翼目标转速。
+5. 本节点不计算升力、不读取飞行状态，也不包含PID。
+6. F = motor_constant * omega^2 由Gazebo C++插件计算。
 """
 
 import math
 import time
-from typing import List, Optional, Sequence, Tuple
+from typing import List
 
 import rclpy
-from gazebo_msgs.msg import LinkStates
-from gazebo_msgs.srv import SetJointProperties
-from geometry_msgs.msg import Quaternion, Wrench
 from rclpy.node import Node
+from rclpy.qos import (
+    DurabilityPolicy,
+    HistoryPolicy,
+    QoSProfile,
+    ReliabilityPolicy,
+)
+from gazebo_msgs.msg import ModelStates
+from std_msgs.msg import Float64MultiArray
 
 
-def clamp(value: float, lower: float, upper: float) -> float:
-    return max(lower, min(upper, value))
-
-
-def wrap_pi(angle: float) -> float:
-    return math.atan2(math.sin(angle), math.cos(angle))
-
-
-def quaternion_to_euler(q: Quaternion) -> Tuple[float, float, float]:
-    """Return roll, pitch, yaw from a ROS quaternion."""
-    sinr_cosp = 2.0 * (q.w * q.x + q.y * q.z)
-    cosr_cosp = 1.0 - 2.0 * (q.x * q.x + q.y * q.y)
-    roll = math.atan2(sinr_cosp, cosr_cosp)
-
-    sinp = 2.0 * (q.w * q.y - q.z * q.x)
-    pitch = math.copysign(math.pi / 2.0, sinp) if abs(sinp) >= 1.0 else math.asin(sinp)
-
-    siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
-    cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
-    yaw = math.atan2(siny_cosp, cosy_cosp)
-    return roll, pitch, yaw
-
-
-def solve_linear_system(matrix: Sequence[Sequence[float]],
-                        vector: Sequence[float]) -> List[float]:
-    """Solve a small dense linear system using pivoted Gauss-Jordan."""
-    n = len(vector)
-    augmented = [list(matrix[i]) + [float(vector[i])] for i in range(n)]
-
-    for column in range(n):
-        pivot = max(range(column, n), key=lambda row: abs(augmented[row][column]))
-        if abs(augmented[pivot][column]) < 1.0e-9:
-            raise RuntimeError("Rotor allocation matrix is singular")
-        augmented[column], augmented[pivot] = augmented[pivot], augmented[column]
-
-        divisor = augmented[column][column]
-        augmented[column] = [value / divisor for value in augmented[column]]
-
-        for row in range(n):
-            if row == column:
-                continue
-            factor = augmented[row][column]
-            augmented[row] = [
-                augmented[row][index] - factor * augmented[column][index]
-                for index in range(n + 1)
-            ]
-    return [augmented[row][n] for row in range(n)]
-
-
-class HoverController(Node):
-    """Cascaded altitude/attitude controller with four-rotor allocation."""
-
-    ROTOR_POSITIONS = (
-        (0.182, -0.150),   # rotor 0: front right, CCW
-        (-0.197, 0.228),   # rotor 1: rear left, CCW
-        (0.181, 0.229),    # rotor 2: front left, CW
-        (-0.200, -0.1515), # rotor 3: rear right, CW
-    )
-    ROTOR_DIRECTIONS = (1.0, 1.0, -1.0, -1.0)
+class MotorSpeedTakeoff(Node):
+    """开环四旋翼转速指令节点，不包含飞行闭环控制。"""
 
     def __init__(self) -> None:
-        super().__init__("roarm_quad_hover")
+        super().__init__("roarm_quad_motor_speed")
 
-        self.declare_parameter("model_name", "roarm_quad")
-        self.declare_parameter("target_height", 1.0)
-        self.declare_parameter("takeoff_time", 3.0)
+        # 【修改1】四个旋翼的固定目标角速度，单位rad/s。
+        #
+        # rotor_0：右前 FR，CCW
+        # rotor_1：左后 BL，CCW
+        # rotor_2：左前 FL，CW
+        # rotor_3：右后 BR，CW
+        self.declare_parameter(
+            "motor_speeds",
+            [105.89, 127.61, 104.10, 129.12],
+        )
+
+        # 插件的ROS 2转速话题。
+        self.declare_parameter(
+            "motor_topic",
+            "/roarm_quad/motor_speed_cmd",
+        )
+
+        # 插件连接成功后，等待一定时间再启动旋翼。
         self.declare_parameter("arm_delay", 1.0)
-        self.declare_parameter("mass", 4.485001)
-        self.declare_parameter("gravity", 9.81)
-        # Composite centre of mass expressed in base_link coordinates.  These
-        # values come from the masses, link poses and inertial poses in the
-        # supplied SDF.  Rotor moments must be calculated about the COM, not
-        # about the base_link origin.
-        self.declare_parameter("com_x", -0.04789749)
-        self.declare_parameter("com_y", 0.03610987)
-        self.declare_parameter("max_thrust_per_rotor", 25.0)
-        self.declare_parameter("control_rate", 100.0)
-        self.declare_parameter("max_safe_tilt_deg", 55.0)
-        self.declare_parameter("kp_xy", 0.8)
-        self.declare_parameter("kd_xy", 1.6)
-        self.declare_parameter("max_position_tilt_deg", 8.0)
-        # F = k_f * omega^2. omega is also sent to Gazebo for rotor animation.
-        self.declare_parameter("thrust_coefficient", 8.0e-4)
-        self.declare_parameter("max_visual_speed", 220.0)
-        self.declare_parameter("visual_update_rate", 10.0)
-        self.declare_parameter("joint_velocity_fmax", 0.005)
 
-        self.model_name = str(self.get_parameter("model_name").value)
-        self.target_height = float(self.get_parameter("target_height").value)
-        self.takeoff_time = max(0.5, float(self.get_parameter("takeoff_time").value))
-        self.arm_delay = max(0.0, float(self.get_parameter("arm_delay").value))
-        self.mass = float(self.get_parameter("mass").value)
-        self.gravity = float(self.get_parameter("gravity").value)
-        self.com_x = float(self.get_parameter("com_x").value)
-        self.com_y = float(self.get_parameter("com_y").value)
-        self.max_rotor_thrust = float(
-            self.get_parameter("max_thrust_per_rotor").value
-        )
-        control_rate = float(self.get_parameter("control_rate").value)
-        self.max_safe_tilt = math.radians(
-            float(self.get_parameter("max_safe_tilt_deg").value)
-        )
-        self.kp_xy = float(self.get_parameter("kp_xy").value)
-        self.kd_xy = float(self.get_parameter("kd_xy").value)
-        self.max_position_tilt = math.radians(
-            float(self.get_parameter("max_position_tilt_deg").value)
-        )
-        self.thrust_coefficient = float(
-            self.get_parameter("thrust_coefficient").value
-        )
-        self.max_visual_speed = float(
-            self.get_parameter("max_visual_speed").value
-        )
-        self.visual_update_period = 1.0 / max(
-            1.0, float(self.get_parameter("visual_update_rate").value)
-        )
-        self.joint_velocity_fmax = float(
-            self.get_parameter("joint_velocity_fmax").value
-        )
+        # 20Hz发送。必须明显小于SDF中的0.5秒command_timeout。
+        self.declare_parameter("publish_period", 0.02)
 
-        # Height-loop gains output total thrust in newtons.
-        self.kp_z = 18.0
-        self.ki_z = 5.0
-        self.kd_z = 12.0
+        self.motor_speeds = [
+            float(value)
+            for value in self.get_parameter("motor_speeds").value
+        ]
 
-        # Attitude-loop gains output body torque in N*m.
-        self.kp_roll = 2.8
-        self.ki_roll = 0.80
-        self.kd_roll = 0.85
-        self.kp_pitch = 2.8
-        self.ki_pitch = 0.80
-        self.kd_pitch = 0.85
-        # Yaw is intentionally more damped than the first version.  The first
-        # flight log showed an alternating yaw oscillation whose amplitude was
-        # growing, so use a lower proportional gain and stronger damping.
-        self.kp_yaw = 0.15
-        self.kd_yaw = 0.30
-        self.max_yaw_torque = 0.12
-        self.yaw_moment_coefficient = 0.015
+        # omega²插件参数，必须与model.sdf保持一致。
+        self.motor_constant = 8.0e-4
+        self.max_omega = 220.0
 
-        self.rotor_publishers = [
-            self.create_publisher(
-                Wrench,
-                f"/{self.model_name}/rotor_{index}/cmd_force",
-                10,
+        # 姿态内环PD参数。
+        self.kp_roll = 0.8
+        self.kd_roll = 0.25
+
+        self.kp_pitch = 1.5
+        self.kd_pitch = 0.45
+
+        self.kp_yaw = 0.25
+        self.kd_yaw = 0.15
+
+        # 姿态控制最大修正力矩。
+        self.max_roll_torque = 0.5
+        self.max_pitch_torque = 0.7
+        self.max_yaw_torque = 0.05
+
+        if len(self.motor_speeds) != 4:
+            raise ValueError(
+                "motor_speeds必须正好包含4个目标角速度"
             )
-            for index in range(4)
-        ]
-        # This is the ROS equivalent of setting rotor joint velocity in
-        # Gazebo's manual Joint Control panel.
-        # ROS 2 Gazebo normally exposes /set_joint_properties. Some launch
-        # files put all Gazebo services below /gazebo, so support both names.
-        self.joint_clients = (
-            self.create_client(SetJointProperties, "/set_joint_properties"),
-            self.create_client(
-                SetJointProperties, "/gazebo/set_joint_properties"
-            ),
-        )
-        self.joint_futures = [None, None, None, None]
-        self.visual_service_reported = False
 
-        # Some Gazebo Classic worlds expose /link_states, others use the
-        # /gazebo/link_states prefix. Listening to both makes the node portable.
-        self.create_subscription(LinkStates, "/link_states", self.state_callback, 10)
-        self.create_subscription(
-            LinkStates, "/gazebo/link_states", self.state_callback, 10
+        if any(value < 0.0 for value in self.motor_speeds):
+            raise ValueError(
+                "motor_speeds应使用非负角速度幅值"
+            )
+
+        if any(value > 220.0 for value in self.motor_speeds):
+            raise ValueError(
+                "motor_speeds不能超过SDF设置的220 rad/s"
+            )
+
+        self.motor_topic = str(
+            self.get_parameter("motor_topic").value
         )
 
-        self.state = None
-        self.start_x: Optional[float] = None
-        self.start_y: Optional[float] = None
-        self.start_z: Optional[float] = None
-        self.target_yaw: Optional[float] = None
-        self.z_integral = 0.0
-        self.roll_integral = 0.0
-        self.pitch_integral = 0.0
-        self.nan_reported = False
-        self.tilt_fault_reported = False
-        # ROS time can jump when /clock first becomes active.  Take-off ramps,
-        # PID dt and log periods use a monotonic clock so a clock jump cannot
-        # skip the complete take-off ramp in the first control iteration.
-        wall_now = time.monotonic()
-        self.last_control_time = wall_now
-        self.start_time: Optional[float] = None
-        self.last_log_time = wall_now
-        self.last_visual_update_time = wall_now
+        self.arm_delay = max(
+            0.0,
+            float(self.get_parameter("arm_delay").value),
+        )
 
-        self.allocation_matrix = self.make_allocation_matrix()
-        self.timer = self.create_timer(1.0 / control_rate, self.control_callback)
+        publish_period = float(
+            self.get_parameter("publish_period").value
+        )
+
+        # 防止发布周期过长，触发插件0.5秒的指令超时。
+        publish_period = min(max(publish_period, 0.02), 0.20)
+
+        # 【修改2】与C++插件相匹配的ROS 2 QoS。
+        qos = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.VOLATILE,
+        )
+
+        # 【修改3】真正的ROS 2发布者。
+        self.motor_publisher = self.create_publisher(
+            Float64MultiArray,
+            self.motor_topic,
+            qos,
+        )
+        
+        # 当前姿态。
+        self.roll = 0.0
+        self.pitch = 0.0
+        self.yaw = 0.0
+        
+        self.x = 0.0
+        self.y = 0.0
+        self.z = 0.0
+        
+        self.linear_x = 0.0
+        self.linear_y = 0.0
+        self.linear_z = 0.0
+        
+        self.debug_counter = 0
+        
+
+        # 当前角速度。
+        self.angular_x = 0.0
+        self.angular_y = 0.0
+        self.angular_z = 0.0
+
+        # 第一次收到状态后，将当时的yaw作为保持目标。
+        self.target_yaw = 0.0
+        self.state_received = False
+
+        # 订阅Gazebo模型状态。
+        self.state_subscription = self.create_subscription(
+            ModelStates,
+            "/model_states",
+            self.state_callback,
+            10,
+        )
+        
+        
+
+        self.plugin_connected = False
+        self.connection_time = None
+        self.takeoff_command_started = False
+        self.waiting_message_printed = False
+
+        self.timer = self.create_timer(
+            publish_period,
+            self.timer_callback,
+        )
+
         self.get_logger().info(
-            "Waiting for base_link state; direct Gazebo controller is ready."
+            "Motor-speed node started with attitude PD feedback; "
+            "no Wrench is published."
         )
 
-    def make_allocation_matrix(self) -> List[List[float]]:
-        # Moment is (r - COM) x F:
-        # tau_x = (y - com_y)*Fz, tau_y = -(x - com_x)*Fz.
-        # The yaw row models each rotor's reaction torque.
-        return [
-            [1.0, 1.0, 1.0, 1.0],
-            [
-                position[1] - self.com_y
-                for position in self.ROTOR_POSITIONS
-            ],
-            [
-                -(position[0] - self.com_x)
-                for position in self.ROTOR_POSITIONS
-            ],
-            [
-                direction * self.yaw_moment_coefficient
-                for direction in self.ROTOR_DIRECTIONS
-            ],
-        ]
+        self.get_logger().info(
+            f"Waiting for motor plugin on {self.motor_topic}"
+        )
 
-    def state_callback(self, message: LinkStates) -> None:
-        wanted_names = (
-            f"{self.model_name}::base_link",
-            f"{self.model_name}/base_link",
-            "base_link",
+        self.get_logger().info(
+            "Target omega [rad/s] = "
+            + str([
+                round(value, 2)
+                for value in self.motor_speeds
+            ])
         )
-        index = next(
-            (message.name.index(name) for name in wanted_names if name in message.name),
-            None,
-        )
-        if index is None:
+
+    
+    def state_callback(self, message: ModelStates) -> None:
+        """从/model_states读取roarm_quad姿态。"""
+
+        try:
+            index = message.name.index("roarm_quad")
+        except ValueError:
             return
 
         pose = message.pose[index]
         twist = message.twist[index]
-        values = (
-            pose.position.x, pose.position.y, pose.position.z,
-            pose.orientation.x, pose.orientation.y,
-            pose.orientation.z, pose.orientation.w,
-            twist.linear.x, twist.linear.y, twist.linear.z,
-            twist.angular.x, twist.angular.y, twist.angular.z,
-        )
-        if not all(math.isfinite(value) for value in values):
-            self.state = None
-            self.publish_zero()
-            if not self.nan_reported:
-                self.get_logger().error(
-                    "Gazebo state contains NaN/Inf. Forces were cut immediately. "
-                    "Reset the world and check for initial collision penetration."
-                )
-                self.nan_reported = True
-            return
+        
+        self.x = pose.position.x
+        self.y = pose.position.y
+        self.z = pose.position.z
 
-        self.nan_reported = False
-        self.state = (pose, twist)
-        if self.start_z is None:
-            self.start_x = pose.position.x
-            self.start_y = pose.position.y
-            self.start_z = pose.position.z
-            _, _, self.target_yaw = quaternion_to_euler(pose.orientation)
-            self.start_time = time.monotonic()
+        self.linear_x = twist.linear.x
+        self.linear_y = twist.linear.y
+        self.linear_z = twist.linear.z
+        
+
+        qx = pose.orientation.x
+        qy = pose.orientation.y
+        qz = pose.orientation.z
+        qw = pose.orientation.w
+
+        # 四元数转换为roll。
+        self.roll = math.atan2(
+            2.0 * (qw * qx + qy * qz),
+            1.0 - 2.0 * (qx * qx + qy * qy),
+        )
+
+        # 四元数转换为pitch。
+        sin_pitch = 2.0 * (qw * qy - qz * qx)
+        sin_pitch = max(-1.0, min(1.0, sin_pitch))
+        self.pitch = math.asin(sin_pitch)
+
+        # 四元数转换为yaw。
+        self.yaw = math.atan2(
+            2.0 * (qw * qz + qx * qy),
+            1.0 - 2.0 * (qy * qy + qz * qz),
+        )
+
+        # 第一阶段飞机接近水平、初始yaw接近0，
+        # 暂时直接使用/model_states的三个角速度分量。
+        self.angular_x = twist.angular.x
+        self.angular_y = twist.angular.y
+        self.angular_z = twist.angular.z
+
+        if not self.state_received:
+            self.target_yaw = self.yaw
+            self.state_received = True
+
             self.get_logger().info(
-                f"State acquired at z={self.start_z:.3f} m. "
-                f"Taking off to z={self.start_z + self.target_height:.3f} m. "
-                f"Holding xy=({self.start_x:.3f}, {self.start_y:.3f}) m. "
-                f"Using COM=({self.com_x:.4f}, {self.com_y:.4f}) m."
+                "Initial attitude received: "
+                f"roll={math.degrees(self.roll):.2f} deg, "
+                f"pitch={math.degrees(self.pitch):.2f} deg, "
+                f"yaw={math.degrees(self.yaw):.2f} deg."
             )
+            
+            
+        self.debug_counter += 1
+        
+        if self.debug_counter >= 50:
+            self.debug_counter = 0
 
-    def desired_z(self, elapsed: float) -> float:
-        assert self.start_z is not None
-        if elapsed <= self.arm_delay:
-            return self.start_z
-        progress = clamp(
-            (elapsed - self.arm_delay) / self.takeoff_time, 0.0, 1.0
-        )
-        # Smoothstep avoids a discontinuous desired climb speed.
-        smooth = progress * progress * (3.0 - 2.0 * progress)
-        return self.start_z + self.target_height * smooth
+            self.get_logger().info(
+                f"x={self.x:.2f}, y={self.y:.2f}, z={self.z:.2f}, "
+                f"vx={self.linear_x:.2f}, vy={self.linear_y:.2f}, "
+                f"roll={math.degrees(self.roll):.2f} deg, "
+                f"pitch={math.degrees(self.pitch):.2f} deg"
+    )
 
-    def control_callback(self) -> None:
-        now = time.monotonic()
-        dt = clamp(now - self.last_control_time, 0.001, 0.05)
-        self.last_control_time = now
 
-        if (
-            self.state is None
-            or self.start_x is None
-            or self.start_y is None
-            or self.start_z is None
-            or self.target_yaw is None
-            or self.start_time is None
-        ):
-            self.publish_zero()
-            return
+        
+    
+    def publish_motor_speeds(
+        self,
+        speeds: List[float],
+    ) -> None:
+        """发布四个旋翼目标角速度。"""
 
-        pose, twist = self.state
-        roll, pitch, yaw = quaternion_to_euler(pose.orientation)
+        message = Float64MultiArray()
+        message.data = [float(value) for value in speeds]
+        self.motor_publisher.publish(message)
+        
+    @staticmethod
+    def clamp(value: float, minimum: float, maximum: float) -> float:
+        """数值限幅。"""
 
-        # A quadrotor cannot recover reliably after it has fallen onto its
-        # back.  More importantly, body-frame +Z thrust points downwards once
-        # the model is inverted.  Cut the motors and report the real modelling
-        # problem instead of driving the body farther through the floor.
-        if abs(roll) > self.max_safe_tilt or abs(pitch) > self.max_safe_tilt:
-            self.publish_zero()
-            self.z_integral = 0.0
-            self.roll_integral = 0.0
-            self.pitch_integral = 0.0
-            if not self.tilt_fault_reported:
-                self.get_logger().error(
-                    "Unsafe initial/fallen attitude: "
-                    f"roll={math.degrees(roll):.1f} deg, "
-                    f"pitch={math.degrees(pitch):.1f} deg. "
-                    "Forces are cut. Reset Gazebo and check spawn roll, "
-                    "landing-gear contact, and model initial pose."
-                )
-                self.tilt_fault_reported = True
-            return
-        self.tilt_fault_reported = False
+        return max(minimum, min(maximum, value))
 
-        elapsed = now - self.start_time
-        z_reference = self.desired_z(elapsed)
 
-        z_error = z_reference - pose.position.z
+    @staticmethod
+    def wrap_angle(angle: float) -> float:
+        """把角度误差限制在[-pi, pi]。"""
 
-        # Outer horizontal-position PD loop.  It commands a world-frame
-        # horizontal acceleration back toward the take-off point.
-        x_error = self.start_x - pose.position.x
-        y_error = self.start_y - pose.position.y
-        ax_command = (
-            self.kp_xy * x_error
-            - self.kd_xy * twist.linear.x
-        )
-        ay_command = (
-            self.kp_xy * y_error
-            - self.kd_xy * twist.linear.y
+        return math.atan2(
+            math.sin(angle),
+            math.cos(angle),
         )
 
-        # Convert desired world-frame horizontal acceleration into desired
-        # body roll and pitch.  For small tilt:
-        # ax ~= g*(cos(yaw)*pitch + sin(yaw)*roll)
-        # ay ~= g*(sin(yaw)*pitch - cos(yaw)*roll)
-        desired_pitch = (
-            math.cos(yaw) * ax_command
-            + math.sin(yaw) * ay_command
-        ) / self.gravity
-        desired_roll = (
-            math.sin(yaw) * ax_command
-            - math.cos(yaw) * ay_command
-        ) / self.gravity
-        desired_roll = clamp(
-            desired_roll,
-            -self.max_position_tilt,
-            self.max_position_tilt,
-        )
-        desired_pitch = clamp(
-            desired_pitch,
-            -self.max_position_tilt,
-            self.max_position_tilt,
+
+    def calculate_stabilized_speeds(self) -> List[float]:
+        """在原有配平转速上加入姿态PD修正。"""
+
+        # 目标roll和pitch均为0。
+        roll_error = -self.roll
+        pitch_error = -self.pitch
+
+        # yaw保持第一次收到状态时的方向。
+        yaw_error = self.wrap_angle(
+            self.target_yaw - self.yaw
         )
 
-        roll_error = desired_roll - roll
-        pitch_error = desired_pitch - pitch
-        yaw_error = wrap_pi(self.target_yaw - yaw)
-
-        self.z_integral = clamp(self.z_integral + z_error * dt, -2.0, 2.0)
-        self.roll_integral = clamp(
-            self.roll_integral + roll_error * dt, -1.5, 1.5
-        )
-        self.pitch_integral = clamp(
-            self.pitch_integral + pitch_error * dt, -1.5, 1.5
-        )
-
-        total_thrust = (
-            self.mass * self.gravity
-            + self.kp_z * z_error
-            + self.ki_z * self.z_integral
-            - self.kd_z * twist.linear.z
-        )
-
-        # Compensate the loss of vertical lift at modest tilt angles.
-        attitude_cosine = max(0.65, math.cos(roll) * math.cos(pitch))
-        total_thrust = clamp(
-            total_thrust / attitude_cosine,
-            0.0,
-            4.0 * self.max_rotor_thrust,
-        )
-
-        roll_torque = (
+        # 姿态PD输出三个目标力矩。
+        torque_x = (
             self.kp_roll * roll_error
-            + self.ki_roll * self.roll_integral
-            - self.kd_roll * twist.angular.x
+            - self.kd_roll * self.angular_x
         )
-        pitch_torque = (
+
+        torque_y = (
             self.kp_pitch * pitch_error
-            + self.ki_pitch * self.pitch_integral
-            - self.kd_pitch * twist.angular.y
+            - self.kd_pitch * self.angular_y
         )
-        yaw_torque = clamp(
+
+        torque_z = (
             self.kp_yaw * yaw_error
-            - self.kd_yaw * twist.angular.z,
+            - self.kd_yaw * self.angular_z
+        )
+
+        # 限制最大修正，避免第一次测试突然翻转。
+        torque_x = self.clamp(
+            torque_x,
+            -self.max_roll_torque,
+            self.max_roll_torque,
+        )
+
+        torque_y = self.clamp(
+            torque_y,
+            -self.max_pitch_torque,
+            self.max_pitch_torque,
+        )
+
+        torque_z = self.clamp(
+            torque_z,
             -self.max_yaw_torque,
             self.max_yaw_torque,
         )
 
-        try:
-            thrusts = solve_linear_system(
-                self.allocation_matrix,
-                (total_thrust, roll_torque, pitch_torque, yaw_torque),
-            )
-        except RuntimeError as error:
-            self.get_logger().error(str(error))
-            self.publish_zero()
-            return
-
-        # Saturating individual motors can spoil attitude control, but is much
-        # safer than sending negative or unbounded thrust to Gazebo.
-        thrusts = [
-            clamp(thrust, 0.0, self.max_rotor_thrust) for thrust in thrusts
+        # 原来的四个配平转速先转换为基础升力。
+        base_forces = [
+            self.motor_constant * omega * omega
+            for omega in self.motor_speeds
         ]
-        if not all(math.isfinite(thrust) for thrust in thrusts):
-            self.publish_zero()
-            return
 
-        for index, (publisher, thrust) in enumerate(
-            zip(self.rotor_publishers, thrusts)
-        ):
-            message = Wrench()
-            message.force.z = thrust
-            message.torque.z = (
-                self.ROTOR_DIRECTIONS[index]
-                * self.yaw_moment_coefficient
-                * thrust
-            )
-            publisher.publish(message)
-
-        self.update_visual_rotor_speeds(thrusts, now)
-
-        if now - self.last_log_time >= 1.0:
-            self.last_log_time = now
-            self.get_logger().info(
-                f"xyz=({pose.position.x:.2f},{pose.position.y:.2f},"
-                f"{pose.position.z:.2f}) m, "
-                f"target=({self.start_x:.2f},{self.start_y:.2f},"
-                f"{z_reference:.2f}) m, "
-                f"vxy=({twist.linear.x:.2f},{twist.linear.y:.2f}) m/s, "
-                f"rpy=({math.degrees(roll):.1f},"
-                f"{math.degrees(pitch):.1f},{math.degrees(yaw):.1f}) deg, "
-                f"rp_ref=({math.degrees(desired_roll):.1f},"
-                f"{math.degrees(desired_pitch):.1f}) deg, "
-                f"rotors={[round(value, 2) for value in thrusts]} N"
-            )
-
-    def update_visual_rotor_speeds(self, thrusts, now) -> None:
-        """Drive visible joints; aerodynamic lift still comes from Wrench."""
-        elapsed = now - self.last_visual_update_time
-        if elapsed < self.visual_update_period:
-            return
-        self.last_visual_update_time = now
-
-        joint_client = next(
+        # 根据当前模型的旋翼位置和质心，
+        # 将roll、pitch、yaw力矩分配到四个旋翼。
+        delta_forces = [
             (
-                client for client in self.joint_clients
-                if client.service_is_ready()
+                -1.32187248 * torque_x
+                -1.32013774 * torque_y
+                -16.58967309 * torque_z
             ),
-            None,
+            (
+                1.32187248 * torque_x
+                +1.32013774 * torque_y
+                -16.74366025 * torque_z
+            ),
+            (
+                1.31493352 * torque_x
+                -1.31146403 * torque_y
+                +16.76505538 * torque_z
+            ),
+            (
+                -1.31493352 * torque_x
+                +1.31146403 * torque_y
+                +16.56827795 * torque_z
+            ),
+        ]
+
+        max_force = (
+            self.motor_constant
+            * self.max_omega
+            * self.max_omega
         )
-        if joint_client is None:
-            if not self.visual_service_reported:
+
+        corrected_speeds = []
+
+        for base_force, delta_force in zip(
+            base_forces,
+            delta_forces,
+        ):
+            target_force = self.clamp(
+                base_force + delta_force,
+                0.0,
+                max_force,
+            )
+
+            target_omega = math.sqrt(
+                target_force / self.motor_constant
+            )
+
+            corrected_speeds.append(target_omega)
+
+        return corrected_speeds
+    
+    
+
+    def timer_callback(self) -> None:
+        """等待插件连接，延时解锁，然后持续发布目标转速。"""
+
+        subscription_count = (
+            self.motor_publisher.get_subscription_count()
+        )
+
+        # 【修改4】先确认Gazebo插件已经成为订阅者。
+        if subscription_count == 0:
+            if not self.waiting_message_printed:
                 self.get_logger().warning(
-                    "No set_joint_properties service: lift control continues, "
-                    "but visual rotors cannot be driven. Ensure gzserver loads "
-                    "libgazebo_ros_properties.so."
+                    "Motor plugin has not subscribed yet; "
+                    "keeping motors stopped."
                 )
-                self.visual_service_reported = True
+                self.waiting_message_printed = True
             return
 
-        if self.visual_service_reported:
+        if not self.plugin_connected:
+            self.plugin_connected = True
+            self.connection_time = time.monotonic()
+
             self.get_logger().info(
-                "Gazebo joint service is ready; visual rotor speed enabled."
+                "Motor plugin subscription detected."
             )
-            self.visual_service_reported = False
 
-        for index, thrust in enumerate(thrusts):
-            pending = self.joint_futures[index]
-            if pending is not None and not pending.done():
-                continue
+        elapsed = time.monotonic() - self.connection_time
 
-            omega = math.sqrt(
-                max(0.0, thrust) / max(1.0e-9, self.thrust_coefficient)
+        # 解锁等待阶段持续发送0，防止电机突然启动。
+        if elapsed < self.arm_delay:
+            self.publish_motor_speeds(
+                [0.0, 0.0, 0.0, 0.0]
             )
-            omega = clamp(omega, 0.0, self.max_visual_speed)
+            return
 
-            request = SetJointProperties.Request()
-            request.joint_name = (
-                f"{self.model_name}::rotor_{index}_joint"
+        # 没有姿态反馈时不启动。
+        if not self.state_received:
+            self.publish_motor_speeds(
+                [0.0, 0.0, 0.0, 0.0]
             )
-            request.ode_joint_config.vel = [
-                self.ROTOR_DIRECTIONS[index] * omega
-            ]
-            # Keep visual joint actuation weak so it does not dominate the
-            # explicitly modelled rotor reaction torque.
-            request.ode_joint_config.fmax = [self.joint_velocity_fmax]
-            self.joint_futures[index] = joint_client.call_async(request)
+            return
 
-    def publish_zero(self) -> None:
-        message = Wrench()
-        for publisher in self.rotor_publishers:
-            publisher.publish(message)
+        # 在原来的配平转速上加入姿态内环修正。
+        stabilized_speeds = (
+            self.calculate_stabilized_speeds()
+        )
 
-    def destroy_node(self) -> bool:
-        if rclpy.ok():
-            self.publish_zero()
-        return super().destroy_node()
+        self.publish_motor_speeds(stabilized_speeds)
+
+        if not self.takeoff_command_started:
+            self.takeoff_command_started = True
+            self.get_logger().info(
+                "Four motor-speed commands are now being published."
+            )
+            self.get_logger().info(
+                "Lift is calculated inside "
+                "libroarm_quad_motor_model.so using F=kf*omega^2."
+            )
+
+    def stop_motors(self) -> None:
+        """退出节点前连续发送几次零转速。"""
+
+        if not rclpy.ok():
+            return
+
+        self.get_logger().info("Stopping all four motors.")
+
+        for _ in range(5):
+            self.publish_motor_speeds(
+                [0.0, 0.0, 0.0, 0.0]
+            )
+            time.sleep(0.05)
 
 
 def main(args=None) -> None:
     rclpy.init(args=args)
-    node = HoverController()
+    node = MotorSpeedTakeoff()
+
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
     finally:
-        if rclpy.ok():
-            node.publish_zero()
+        node.stop_motors()
         node.destroy_node()
+
         if rclpy.ok():
             rclpy.shutdown()
 

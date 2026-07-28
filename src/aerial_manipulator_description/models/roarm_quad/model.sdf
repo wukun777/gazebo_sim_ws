@@ -68,7 +68,7 @@
         <geometry>
           <mesh>
             <scale>0.001 0.001 0.001</scale> <!-- 毫米STL在此等比缩小为米 -->
-            <uri>model://roarm_quad/meshes/uav/drone_body.STL</uri>
+            <uri>model://roarm_quad/meshes/drone_body.STL</uri>
           </mesh>
         </geometry>
       </visual>
@@ -98,7 +98,7 @@
       <visual name="arm_base_link_visual">
         <geometry>
           <mesh>
-            <uri>model://roarm_quad/meshes/arm/base_link.STL</uri>
+            <uri>model://roarm_quad/meshes/base_link.STL</uri>
           </mesh>
         </geometry>
       </visual>
@@ -106,7 +106,7 @@
       <collision name="arm_base_link_collision">
         <geometry>
           <mesh>
-            <uri>model://roarm_quad/meshes/arm/base_link.STL</uri>
+            <uri>model://roarm_quad/meshes/base_link.STL</uri>
           </mesh>
         </geometry>
          <surface>
@@ -139,9 +139,9 @@
           <izz>6.52752E-05</izz>
         </inertia>
       </inertial>
-      <visual name="link1_visual"><geometry><mesh><uri>model://roarm_quad/meshes/arm/link1.STL</uri></mesh></geometry></visual>
+      <visual name="link1_visual"><geometry><mesh><uri>model://roarm_quad/meshes/link1.STL</uri></mesh></geometry></visual>
       <!-- 机械臂碰撞暂时关闭
-      <collision name="link1_collision"><geometry><mesh><uri>model://roarm_quad/meshes/arm/link1.STL</uri></mesh></geometry>
+      <collision name="link1_collision"><geometry><mesh><uri>model://roarm_quad/meshes/link1.STL</uri></mesh></geometry>
       
          <surface>
           <contact>
@@ -186,9 +186,9 @@
           <izz>0.000445453</izz>
         </inertia>
       </inertial>
-      <visual name="link2_visual"><geometry><mesh><uri>model://roarm_quad/meshes/arm/link2.STL</uri></mesh></geometry></visual>
+      <visual name="link2_visual"><geometry><mesh><uri>model://roarm_quad/meshes/link2.STL</uri></mesh></geometry></visual>
       <!-- 机械臂碰撞暂时关闭
-      <collision name="link2_collision"><geometry><mesh><uri>model://roarm_quad/meshes/arm/link2.STL</uri></mesh></geometry>
+      <collision name="link2_collision"><geometry><mesh><uri>model://roarm_quad/meshes/link2.STL</uri></mesh></geometry>
          <surface>
           <contact>
             <collide_bitmask>0x02</collide_bitmask>
@@ -233,9 +233,9 @@
           <izz>0.000139109</izz>
         </inertia>
       </inertial>
-      <visual name="link3_visual"><geometry><mesh><uri>model://roarm_quad/meshes/arm/link3.STL</uri></mesh></geometry></visual>
+      <visual name="link3_visual"><geometry><mesh><uri>model://roarm_quad/meshes/link3.STL</uri></mesh></geometry></visual>
       <!-- 机械臂碰撞暂时关闭
-      <collision name="link3_collision"><geometry><mesh><uri>model://roarm_quad/meshes/arm/link3.STL</uri></mesh></geometry></collision>
+      <collision name="link3_collision"><geometry><mesh><uri>model://roarm_quad/meshes/link3.STL</uri></mesh></geometry>
          <surface>
           <contact>
             <collide_bitmask>0x02</collide_bitmask>
@@ -282,9 +282,9 @@
           <izz>1.96850E-06</izz>
         </inertia>
       </inertial>
-      <visual name="gripper_link_visual"><geometry><mesh><uri>model://roarm_quad/meshes/arm/gripper_link.STL</uri></mesh></geometry></visual>
+      <visual name="gripper_link_visual"><geometry><mesh><uri>model://roarm_quad/meshes/gripper_link.STL</uri></mesh></geometry></visual>
       <!-- 机械臂碰撞暂时关闭
-      <collision name="gripper_link_collision"><geometry><mesh><uri>model://roarm_quad/meshes/arm/gripper_link.STL</uri></mesh></geometry></collision>
+      <collision name="gripper_link_collision"><geometry><mesh><uri>model://roarm_quad/meshes/gripper_link.STL</uri></mesh></geometry></collision>
       -->
     </link>
     <joint name="link3_to_gripper_link" type="revolute">
@@ -319,7 +319,7 @@
       <!-- 💡 4. 螺旋桨 0 安装与高低参数 -->
       <pose relative_to="base_link">0.182 -0.15 0.1125 0 0 0</pose>
       <inertial><pose>0 0 0 0 0 0</pose><mass>0.005</mass><inertia><ixx>9.75e-07</ixx><ixy>0</ixy><ixz>0</ixz><iyy>0.000273</iyy><iyz>0</iyz><izz>0.000274</izz></inertia></inertial>
-      <visual name="rotor_0_visual"><geometry><mesh><scale>1 1 1</scale><uri>model://roarm_quad/meshes/rotors/iris_prop_ccw.dae</uri></mesh></geometry></visual>
+      <visual name="rotor_0_visual"><geometry><mesh><scale>1 1 1</scale><uri>model://roarm_quad/meshes/iris_prop_ccw.dae</uri></mesh></geometry></visual>
     </link>
     <joint name="rotor_0_joint" type="revolute">
       <parent>base_link</parent><child>rotor_0</child>
@@ -338,7 +338,7 @@
       <!-- 💡 4. 螺旋桨 1 安装与高低参数 -->
       <pose relative_to="base_link">-0.197 0.228 0.1125 0 0 0</pose>
       <inertial><pose>0 0 0 0 0 0</pose><mass>0.005</mass><inertia><ixx>9.75e-07</ixx><ixy>0</ixy><ixz>0</ixz><iyy>0.000273</iyy><iyz>0</iyz><izz>0.000274</izz></inertia></inertial>
-      <visual name="rotor_1_visual"><geometry><mesh><scale>1 1 1</scale><uri>model://roarm_quad/meshes/rotors/iris_prop_ccw.dae</uri></mesh></geometry></visual>
+      <visual name="rotor_1_visual"><geometry><mesh><scale>1 1 1</scale><uri>model://roarm_quad/meshes/iris_prop_ccw.dae</uri></mesh></geometry></visual>
     </link>
     <joint name="rotor_1_joint" type="revolute">
       <parent>base_link</parent><child>rotor_1</child>
@@ -357,7 +357,7 @@
       <!-- 💡 4. 螺旋桨 2 安装与高低参数 -->
       <pose relative_to="base_link">0.181 0.229 0.1125 0 0 0</pose>
       <inertial><pose>0 0 0 0 0 0</pose><mass>0.005</mass><inertia><ixx>9.75e-07</ixx><ixy>0</ixy><ixz>0</ixz><iyy>0.000273</iyy><iyz>0</iyz><izz>0.000274</izz></inertia></inertial>
-      <visual name="rotor_2_visual"><geometry><mesh><scale>1 1 1</scale><uri>model://roarm_quad/meshes/rotors/iris_prop_cw.dae</uri></mesh></geometry></visual>
+      <visual name="rotor_2_visual"><geometry><mesh><scale>1 1 1</scale><uri>model://roarm_quad/meshes/iris_prop_cw.dae</uri></mesh></geometry></visual>
     </link>
     <joint name="rotor_2_joint" type="revolute">
       <parent>base_link</parent><child>rotor_2</child>
@@ -376,7 +376,7 @@
       <!-- 💡 4. 螺旋桨 3 安装与高低参数 -->
       <pose relative_to="base_link">-0.2 -0.1515 0.1125 0 0 0</pose>
       <inertial><pose>0 0 0 0 0 0</pose><mass>0.005</mass><inertia><ixx>9.75e-07</ixx><ixy>0</ixy><ixz>0</ixz><iyy>0.000273</iyy><iyz>0</iyz><izz>0.000274</izz></inertia></inertial>
-      <visual name="rotor_3_visual"><geometry><mesh><scale>1 1 1</scale><uri>model://roarm_quad/meshes/rotors/iris_prop_cw.dae</uri></mesh></geometry></visual>
+      <visual name="rotor_3_visual"><geometry><mesh><scale>1 1 1</scale><uri>model://roarm_quad/meshes/iris_prop_cw.dae</uri></mesh></geometry></visual>
     </link>
     <joint name="rotor_3_joint" type="revolute">
       <parent>base_link</parent><child>rotor_3</child>
@@ -391,47 +391,67 @@
     </joint>
 
 
-    <!-- ========================================== -->
-    <!--       4. ROS 2 direct rotor force interface         -->
-    <!-- ========================================== -->
-    <!--
-      控制节点向四个 cmd_force 话题发布 geometry_msgs/msg/Wrench。
-      force.z 为旋翼升力，torque.z 为旋翼反扭矩。
-    -->
-    <plugin name="gazebo_ros_force_rotor_0" filename="libgazebo_ros_force.so">
-      <ros>
-        <namespace>/roarm_quad/rotor_0</namespace>
-        <remapping>gazebo_ros_force:=cmd_force</remapping>
-      </ros>
-      <link_name>rotor_0</link_name>
-      <force_frame>link</force_frame>
-    </plugin>
+    <!-- ========================================================== -->
+    <!-- ROS 2 电机—旋翼动力学插件                                  -->
+    <!-- 接收4个目标角速度，模拟电机延迟，按照 F=kf*omega^2 计算升力 -->
+    <!-- ========================================================== -->
+    <plugin
+      name="roarm_quad_motor_model"
+      filename="libroarm_quad_motor_model.so">
 
-    <plugin name="gazebo_ros_force_rotor_1" filename="libgazebo_ros_force.so">
       <ros>
-        <namespace>/roarm_quad/rotor_1</namespace>
-        <remapping>gazebo_ros_force:=cmd_force</remapping>
+        <namespace>/roarm_quad</namespace>
       </ros>
-      <link_name>rotor_1</link_name>
-      <force_frame>link</force_frame>
-    </plugin>
 
-    <plugin name="gazebo_ros_force_rotor_2" filename="libgazebo_ros_force.so">
-      <ros>
-        <namespace>/roarm_quad/rotor_2</namespace>
-        <remapping>gazebo_ros_force:=cmd_force</remapping>
-      </ros>
-      <link_name>rotor_2</link_name>
-      <force_frame>link</force_frame>
-    </plugin>
+      <!-- 无人机机身link -->
+      <body_link>base_link</body_link>
 
-    <plugin name="gazebo_ros_force_rotor_3" filename="libgazebo_ros_force.so">
-      <ros>
-        <namespace>/roarm_quad/rotor_3</namespace>
-        <remapping>gazebo_ros_force:=cmd_force</remapping>
-      </ros>
-      <link_name>rotor_3</link_name>
-      <force_frame>link</force_frame>
+      <!--
+        完整ROS 2话题：
+        /roarm_quad/motor_speed_cmd
+
+        消息类型：
+        std_msgs/msg/Float64MultiArray
+      -->
+      <command_topic>motor_speed_cmd</command_topic>
+
+      <!-- 超过0.5秒没有新指令，目标转速自动归零 -->
+      <command_timeout>0.5</command_timeout>
+
+      <!-- 升力公式：F = motor_constant * omega^2 -->
+      <motor_constant>8.0e-4</motor_constant>
+
+      <!-- 旋翼反扭矩系数 -->
+      <moment_constant>0.015</moment_constant>
+
+      <!-- 电机一阶响应时间 -->
+      <time_constant_up>0.15</time_constant_up>
+      <time_constant_down>0.25</time_constant_down>
+
+      <!-- 最大真实旋翼转速，单位rad/s -->
+      <max_rot_velocity>220.0</max_rot_velocity>
+
+      <!--
+        Gazebo中关节实际显示速度为omega/10，
+        但升力仍使用真实omega计算
+      -->
+      <rotor_velocity_slowdown_sim>10.0</rotor_velocity_slowdown_sim>
+
+      <!-- rotor_0、1为CCW；rotor_2、3为CW -->
+      <rotor_directions>1 1 -1 -1</rotor_directions>
+
+      <!-- 四个旋翼link -->
+      <rotor_0_link>rotor_0</rotor_0_link>
+      <rotor_1_link>rotor_1</rotor_1_link>
+      <rotor_2_link>rotor_2</rotor_2_link>
+      <rotor_3_link>rotor_3</rotor_3_link>
+
+      <!-- 四个旋翼joint -->
+      <rotor_0_joint>rotor_0_joint</rotor_0_joint>
+      <rotor_1_joint>rotor_1_joint</rotor_1_joint>
+      <rotor_2_joint>rotor_2_joint</rotor_2_joint>
+      <rotor_3_joint>rotor_3_joint</rotor_3_joint>
+
     </plugin>
 
     <!-- ========================================== -->
@@ -455,11 +475,11 @@
         <always_on>true</always_on>
         <update_rate>200.0</update_rate>
         <visualize>false</visualize>
-        <topic>/imu/data</topic>
+        <topic>/livox/imu</topic>
         <plugin name="gazebo_ros_imu_sensor" filename="libgazebo_ros_imu_sensor.so">
           <ros>
             <namespace>/</namespace>
-            <remapping>~/out:=/imu/data</remapping>
+            <remapping>~/out:=/livox/imu</remapping>
           </ros>
           <frame_name>imu_link</frame_name>
           <initial_orientation_as_reference>false</initial_orientation_as_reference>
@@ -472,3 +492,4 @@
     </joint>
   </model>
 </sdf>
+
