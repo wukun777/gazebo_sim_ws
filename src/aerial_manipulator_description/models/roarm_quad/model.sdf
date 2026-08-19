@@ -68,7 +68,7 @@
         <geometry>
           <mesh>
             <scale>0.001 0.001 0.001</scale> <!-- 毫米STL在此等比缩小为米 -->
-            <uri>model://roarm_quad/meshes/drone_body.STL</uri>
+            <uri>model://roarm_quad/meshes/uav/drone_body.STL</uri>
           </mesh>
         </geometry>
       </visual>
@@ -98,7 +98,7 @@
       <visual name="arm_base_link_visual">
         <geometry>
           <mesh>
-            <uri>model://roarm_quad/meshes/base_link.STL</uri>
+            <uri>model://roarm_quad/meshes/arm/base_link.STL</uri>
           </mesh>
         </geometry>
       </visual>
@@ -106,7 +106,7 @@
       <collision name="arm_base_link_collision">
         <geometry>
           <mesh>
-            <uri>model://roarm_quad/meshes/base_link.STL</uri>
+            <uri>model://roarm_quad/meshes/arm/base_link.STL</uri>
           </mesh>
         </geometry>
          <surface>
@@ -139,9 +139,9 @@
           <izz>6.52752E-05</izz>
         </inertia>
       </inertial>
-      <visual name="link1_visual"><geometry><mesh><uri>model://roarm_quad/meshes/link1.STL</uri></mesh></geometry></visual>
+      <visual name="link1_visual"><geometry><mesh><uri>model://roarm_quad/meshes/arm/link1.STL</uri></mesh></geometry></visual>
       <!-- 机械臂碰撞暂时关闭
-      <collision name="link1_collision"><geometry><mesh><uri>model://roarm_quad/meshes/link1.STL</uri></mesh></geometry>
+      <collision name="link1_collision"><geometry><mesh><uri>model://roarm_quad/meshes/arm/link1.STL</uri></mesh></geometry>
       
          <surface>
           <contact>
@@ -186,9 +186,9 @@
           <izz>0.000445453</izz>
         </inertia>
       </inertial>
-      <visual name="link2_visual"><geometry><mesh><uri>model://roarm_quad/meshes/link2.STL</uri></mesh></geometry></visual>
+      <visual name="link2_visual"><geometry><mesh><uri>model://roarm_quad/meshes/arm/link2.STL</uri></mesh></geometry></visual>
       <!-- 机械臂碰撞暂时关闭
-      <collision name="link2_collision"><geometry><mesh><uri>model://roarm_quad/meshes/link2.STL</uri></mesh></geometry>
+      <collision name="link2_collision"><geometry><mesh><uri>model://roarm_quad/meshes/arm/link2.STL</uri></mesh></geometry>
          <surface>
           <contact>
             <collide_bitmask>0x02</collide_bitmask>
@@ -233,9 +233,9 @@
           <izz>0.000139109</izz>
         </inertia>
       </inertial>
-      <visual name="link3_visual"><geometry><mesh><uri>model://roarm_quad/meshes/link3.STL</uri></mesh></geometry></visual>
+      <visual name="link3_visual"><geometry><mesh><uri>model://roarm_quad/meshes/arm/link3.STL</uri></mesh></geometry></visual>
       <!-- 机械臂碰撞暂时关闭
-      <collision name="link3_collision"><geometry><mesh><uri>model://roarm_quad/meshes/link3.STL</uri></mesh></geometry>
+      <collision name="link3_collision"><geometry><mesh><uri>model://roarm_quad/meshes/arm/link3.STL</uri></mesh></geometry></collision>
          <surface>
           <contact>
             <collide_bitmask>0x02</collide_bitmask>
@@ -282,9 +282,9 @@
           <izz>1.96850E-06</izz>
         </inertia>
       </inertial>
-      <visual name="gripper_link_visual"><geometry><mesh><uri>model://roarm_quad/meshes/gripper_link.STL</uri></mesh></geometry></visual>
+      <visual name="gripper_link_visual"><geometry><mesh><uri>model://roarm_quad/meshes/arm/gripper_link.STL</uri></mesh></geometry></visual>
       <!-- 机械臂碰撞暂时关闭
-      <collision name="gripper_link_collision"><geometry><mesh><uri>model://roarm_quad/meshes/gripper_link.STL</uri></mesh></geometry></collision>
+      <collision name="gripper_link_collision"><geometry><mesh><uri>model://roarm_quad/meshes/arm/gripper_link.STL</uri></mesh></geometry></collision>
       -->
     </link>
     <joint name="link3_to_gripper_link" type="revolute">
@@ -319,7 +319,7 @@
       <!-- 💡 4. 螺旋桨 0 安装与高低参数 -->
       <pose relative_to="base_link">0.182 -0.15 0.1125 0 0 0</pose>
       <inertial><pose>0 0 0 0 0 0</pose><mass>0.005</mass><inertia><ixx>9.75e-07</ixx><ixy>0</ixy><ixz>0</ixz><iyy>0.000273</iyy><iyz>0</iyz><izz>0.000274</izz></inertia></inertial>
-      <visual name="rotor_0_visual"><geometry><mesh><scale>1 1 1</scale><uri>model://roarm_quad/meshes/iris_prop_ccw.dae</uri></mesh></geometry></visual>
+      <visual name="rotor_0_visual"><geometry><mesh><scale>1 1 1</scale><uri>model://roarm_quad/meshes/rotors/iris_prop_ccw.dae</uri></mesh></geometry></visual>
     </link>
     <joint name="rotor_0_joint" type="revolute">
       <parent>base_link</parent><child>rotor_0</child>
@@ -338,7 +338,7 @@
       <!-- 💡 4. 螺旋桨 1 安装与高低参数 -->
       <pose relative_to="base_link">-0.197 0.228 0.1125 0 0 0</pose>
       <inertial><pose>0 0 0 0 0 0</pose><mass>0.005</mass><inertia><ixx>9.75e-07</ixx><ixy>0</ixy><ixz>0</ixz><iyy>0.000273</iyy><iyz>0</iyz><izz>0.000274</izz></inertia></inertial>
-      <visual name="rotor_1_visual"><geometry><mesh><scale>1 1 1</scale><uri>model://roarm_quad/meshes/iris_prop_ccw.dae</uri></mesh></geometry></visual>
+      <visual name="rotor_1_visual"><geometry><mesh><scale>1 1 1</scale><uri>model://roarm_quad/meshes/rotors/iris_prop_ccw.dae</uri></mesh></geometry></visual>
     </link>
     <joint name="rotor_1_joint" type="revolute">
       <parent>base_link</parent><child>rotor_1</child>
@@ -357,7 +357,7 @@
       <!-- 💡 4. 螺旋桨 2 安装与高低参数 -->
       <pose relative_to="base_link">0.181 0.229 0.1125 0 0 0</pose>
       <inertial><pose>0 0 0 0 0 0</pose><mass>0.005</mass><inertia><ixx>9.75e-07</ixx><ixy>0</ixy><ixz>0</ixz><iyy>0.000273</iyy><iyz>0</iyz><izz>0.000274</izz></inertia></inertial>
-      <visual name="rotor_2_visual"><geometry><mesh><scale>1 1 1</scale><uri>model://roarm_quad/meshes/iris_prop_cw.dae</uri></mesh></geometry></visual>
+      <visual name="rotor_2_visual"><geometry><mesh><scale>1 1 1</scale><uri>model://roarm_quad/meshes/rotors/iris_prop_cw.dae</uri></mesh></geometry></visual>
     </link>
     <joint name="rotor_2_joint" type="revolute">
       <parent>base_link</parent><child>rotor_2</child>
@@ -376,7 +376,7 @@
       <!-- 💡 4. 螺旋桨 3 安装与高低参数 -->
       <pose relative_to="base_link">-0.2 -0.1515 0.1125 0 0 0</pose>
       <inertial><pose>0 0 0 0 0 0</pose><mass>0.005</mass><inertia><ixx>9.75e-07</ixx><ixy>0</ixy><ixz>0</ixz><iyy>0.000273</iyy><iyz>0</iyz><izz>0.000274</izz></inertia></inertial>
-      <visual name="rotor_3_visual"><geometry><mesh><scale>1 1 1</scale><uri>model://roarm_quad/meshes/iris_prop_cw.dae</uri></mesh></geometry></visual>
+      <visual name="rotor_3_visual"><geometry><mesh><scale>1 1 1</scale><uri>model://roarm_quad/meshes/rotors/iris_prop_cw.dae</uri></mesh></geometry></visual>
     </link>
     <joint name="rotor_3_joint" type="revolute">
       <parent>base_link</parent><child>rotor_3</child>
