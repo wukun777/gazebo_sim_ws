@@ -9,7 +9,7 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    pkg_share = get_package_share_directory('hover_control')
+    pkg_share = get_package_share_directory('aerial_manipulator_description')
     world_path = os.path.join(
         pkg_share,
         'worlds',
