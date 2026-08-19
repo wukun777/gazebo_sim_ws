@@ -10,10 +10,11 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     pkg_share = get_package_share_directory('aerial_manipulator_description')
+    worlds_share = get_package_share_directory('gazebo_worlds')
     world_path = os.path.join(
-        pkg_share,
+        worlds_share,
         'worlds',
-        'my_simple_room.world',
+        'simple_room.world',
     )
     models_dir = os.path.join(pkg_share, 'models')
     model_path = os.path.join(
@@ -88,10 +89,10 @@ def generate_launch_description():
                 executable='hover_node',
                 parameters=[{
                     'use_sim_time': True,
-                    'mass_kg': 4.495,
+                    'mass': 4.485001,
                     'gravity': 9.8,
-                    'target_z': 1.0,
-                    'control_rate_hz': 50.0,
+                    'target_height': 1.0,
+                    'control_rate': 100.0,
                 }],
                 output='screen',
             )
