@@ -6,6 +6,8 @@
 本仿真不涉及 PX4、MAVROS、PX4 SITL、Fast-LIO 或 Livox 驱动。当前控制器
 直接读取 Gazebo 状态，并向 `roarm_quad` 模型发布旋翼力指令。
 
+ubuntu 22.04 humble
+
 ## 一、完整目录结构
 
 ```text
