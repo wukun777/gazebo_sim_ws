@@ -9,14 +9,14 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    description_share = get_package_share_directory(
-        'aerial_manipulator_description'
-    )
+    pkg_share = get_package_share_directory('aerial_manipulator_description')
     worlds_share = get_package_share_directory('gazebo_worlds')
     world_path = os.path.join(
-        worlds_share, 'worlds', 'simple_room.world'
+        worlds_share,
+        'worlds',
+        'simple_room.world',
     )
-    models_dir = os.path.join(description_share, 'models')
+    models_dir = os.path.join(pkg_share, 'models')
     model_path = os.path.join(
         models_dir, 'roarm_quad', 'model.sdf'
     )
